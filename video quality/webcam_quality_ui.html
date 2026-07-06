@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Webcam Quality</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:     #0d0f14;
+    --panel:  #13161e;
+    --border: #1f2433;
+    --accent: #00e5ff;
+    --good:   #00e676;
+    --fair:   #ffea00;
+    --poor:   #ff1744;
+    --muted:  #4a5068;
+    --text:   #cdd6f4;
+    --label:  #7c83a0;
+    --mono:   'Share Tech Mono', monospace;
+    --sans:   'Inter', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .logo-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  header h1 {
+    font-family: var(--mono);
+    font-size: 17px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .status-chip {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    transition: all 0.3s;
+  }
+  .status-chip.live { border-color:var(--good); color:var(--good); box-shadow:0 0 6px var(--good); }
+  .status-chip.error { border-color:var(--poor); color:var(--poor); }
+
+  /* ── Layout ── */
+  main { flex:1; display:flex; }
+
+  /* ── Video pane ── */
+  .video-pane {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #0a0b10;
+    position: relative;
+  }
+  #videoImg {
+    width: 100%;
+    max-width: 720px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+    background: #000;
+    min-height: 200px;
+  }
+  .waiting-msg {
+    position: absolute;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-align: center;
+    pointer-events: none;
+  }
+  .video-overlay-label {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+  }
+
+  /* ── Side panel ── */
+  .side-panel {
+    width: 300px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .panel-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  /* ── Gauge ── */
+  .gauge-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .gauge-svg  { width:140px; height:140px; }
+  .gauge-ring-bg { fill:none; stroke:var(--border); stroke-width:8; }
+  .gauge-ring {
+    fill: none; stroke-width: 8; stroke-linecap: round; stroke: var(--accent);
+    transform-origin: 50% 50%; transform: rotate(-90deg);
+    transition: stroke-dashoffset 0.5s cubic-bezier(.4,0,.2,1), stroke 0.4s;
+  }
+  .gauge-value { font-family:var(--mono); font-size:32px; fill:var(--text); text-anchor:middle; dominant-baseline:middle; }
+  .gauge-unit  { font-family:var(--mono); font-size:12px; fill:var(--muted); text-anchor:middle; }
+  .quality-badge {
+    font-family:var(--mono); font-size:15px; letter-spacing:0.15em;
+    padding:4px 14px; border-radius:20px; border:1px solid currentColor; transition:all 0.4s;
+  }
+
+  /* ── Metrics ── */
+  .metric-row { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+  .metric-row:last-child { margin-bottom:0; }
+  .metric-header { display:flex; justify-content:space-between; align-items:baseline; }
+  .metric-name  { font-size:14px; color:var(--label); letter-spacing:0.05em; }
+  .metric-value { font-family:var(--mono); font-size:16px; color:var(--text); transition:color 0.3s; }
+  .metric-bar-track { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .metric-bar-fill  { height:100%; border-radius:2px; background:var(--accent); transition:width 0.4s cubic-bezier(.4,0,.2,1), background 0.4s; }
+
+  /* ── Session ── */
+  .meta-row { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); font-family:var(--mono); margin-bottom:6px; }
+  .meta-row span:last-child { color:var(--label); }
+
+  /* ── Connection panel ── */
+  .connect-row { display:flex; gap:8px; margin-bottom:12px; }
+  .ws-input {
+    flex:1; background:var(--bg); border:1px solid var(--border);
+    color:var(--text); font-family:var(--mono); font-size:12px;
+    padding:8px 10px; border-radius:3px; outline:none;
+  }
+  .ws-input:focus { border-color:var(--accent); }
+  .connect-btn {
+    padding:8px 14px; background:transparent; border:1px solid var(--accent);
+    color:var(--accent); font-family:var(--mono); font-size:12px;
+    letter-spacing:0.1em; border-radius:3px; cursor:pointer;
+    transition:background 0.2s, box-shadow 0.2s; white-space:nowrap;
+  }
+  .connect-btn:hover { background:rgba(0,229,255,0.07); box-shadow:0 0 10px rgba(0,229,255,0.2); }
+  .connect-btn.disconnect { border-color:var(--poor); color:var(--poor); }
+  .connect-btn.disconnect:hover { background:rgba(255,23,68,0.07); box-shadow:0 0 10px rgba(255,23,68,0.2); }
+  .conn-hint { font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-dot"></div>
+  <h1>Webcam Quality Analyzer</h1>
+  <div class="status-chip" id="statusChip">DISCONNECTED</div>
+</header>
+
+<main>
+  <!-- Video -->
+  <div class="video-pane">
+    <img id="videoImg" alt="Waiting for stream…"/>
+    <div class="waiting-msg" id="waitingMsg">Waiting for Python server…</div>
+    <div class="video-overlay-label">PYTHON · OPENCV FEED</div>
+  </div>
+
+  <!-- Side panel -->
+  <aside class="side-panel">
+
+    <!-- Quality gauge -->
+    <div class="panel-section">
+      <div class="section-label">Quality Score</div>
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 140 140">
+          <circle class="gauge-ring-bg" cx="70" cy="70" r="54"/>
+          <circle class="gauge-ring" id="gaugeRing" cx="70" cy="70" r="54"
+            stroke-dasharray="339.3" stroke-dashoffset="339.3"/>
+          <text class="gauge-value" id="gaugeText" x="70" y="66">–</text>
+          <text class="gauge-unit" x="70" y="86">SHARPNESS</text>
+        </svg>
+        <div class="quality-badge" id="qualityBadge" style="color:var(--muted);border-color:var(--muted)">
+          WAITING
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="panel-section">
+      <div class="section-label">Metrics</div>
+
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">Brightness</span>
+          <span class="metric-value" id="valBrightness">–</span>
+        </div>
+        <div class="metric-bar-track"><div class="metric-bar-fill" id="barBrightness" style="width:0%"></div></div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">Contrast</span>
+          <span class="metric-value" id="valContrast">–</span>
+        </div>
+        <div class="metric-bar-track"><div class="metric-bar-fill" id="barContrast" style="width:0%"></div></div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">Noise Level</span>
+          <span class="metric-value" id="valNoise">–</span>
+        </div>
+        <div class="metric-bar-track"><div class="metric-bar-fill" id="barNoise" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Session -->
+    <div class="panel-section">
+      <div class="section-label">Session</div>
+      <div class="meta-row"><span>Frames</span><span id="metaFrames">0</span></div>
+      <div class="meta-row"><span>Elapsed</span><span id="metaTime">00:00</span></div>
+      <div class="meta-row"><span>Resolution</span><span id="metaRes">–</span></div>
+    </div>
+
+    <!-- Connection -->
+    <div class="panel-section">
+      <div class="section-label">Connection</div>
+      <div class="connect-row">
+        <input class="ws-input" id="wsUrl" value="ws://localhost:8765" spellcheck="false"/>
+        <button class="connect-btn" id="connectBtn" onclick="toggleConnection()">CONNECT</button>
+      </div>
+      <div class="conn-hint">
+        Run <strong style="color:var(--accent)">webcam_server.py</strong> first,<br>
+        then click Connect.
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<script>
+const CIRCUMFERENCE = 2 * Math.PI * 54;
+
+let ws = null;
+let startTime = null;
+let timerInterval = null;
+
+const statusChip  = document.getElementById('statusChip');
+const gaugeRing   = document.getElementById('gaugeRing');
+const gaugeText   = document.getElementById('gaugeText');
+const qualBadge   = document.getElementById('qualityBadge');
+const connectBtn  = document.getElementById('connectBtn');
+const videoImg    = document.getElementById('videoImg');
+const waitingMsg  = document.getElementById('waitingMsg');
+
+function toggleConnection() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  } else {
+    connect();
+  }
+}
+
+function connect() {
+  const url = document.getElementById('wsUrl').value.trim();
+  try {
+    ws = new WebSocket(url);
+  } catch(e) {
+    setStatus('ERROR', 'error');
+    return;
+  }
+
+  setStatus('CONNECTING…', '');
+
+  ws.onopen = () => {
+    setStatus('LIVE', 'live');
+    connectBtn.textContent = 'DISCONNECT';
+    connectBtn.classList.add('disconnect');
+    startTime = Date.now();
+    timerInterval = setInterval(updateTimer, 1000);
+    waitingMsg.style.display = 'none';
+  };
+
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    updateUI(d);
+  };
+
+  ws.onerror = () => setStatus('ERROR', 'error');
+
+  ws.onclose = () => {
+    setStatus('DISCONNECTED', '');
+    connectBtn.textContent = 'CONNECT';
+    connectBtn.classList.remove('disconnect');
+    clearInterval(timerInterval);
+    waitingMsg.style.display = '';
+  };
+}
+
+function setStatus(text, cls) {
+  statusChip.textContent = text;
+  statusChip.className = 'status-chip' + (cls ? ' ' + cls : '');
+}
+
+function updateTimer() {
+  if (!startTime) return;
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const mm = String(Math.floor(elapsed / 60)).padStart(2,'0');
+  const ss = String(elapsed % 60).padStart(2,'0');
+  document.getElementById('metaTime').textContent = `${mm}:${ss}`;
+}
+
+function updateUI(d) {
+  // Video frame
+  videoImg.src = 'data:image/jpeg;base64,' + d.frame;
+
+  // Quality colour
+  const colorMap = { EXCELLENT:'var(--good)', GOOD:'var(--accent)', FAIR:'var(--fair)', POOR:'var(--poor)' };
+  const color = colorMap[d.quality] || 'var(--muted)';
+
+  // Gauge
+  const pct = Math.min(d.sharpness / 600, 1);
+  gaugeRing.style.strokeDashoffset = CIRCUMFERENCE * (1 - pct);
+  gaugeRing.style.stroke = color;
+  gaugeText.textContent  = Math.round(d.sharpness);
+  qualBadge.textContent  = d.quality;
+  qualBadge.style.color       = color;
+  qualBadge.style.borderColor = color;
+
+  // Brightness bar
+  document.getElementById('valBrightness').textContent = d.brightness.toFixed(1);
+  const bPct = (d.brightness / 255 * 100).toFixed(1);
+  document.getElementById('barBrightness').style.width = bPct + '%';
+  document.getElementById('barBrightness').style.background =
+    (d.brightness < 40 || d.brightness > 220) ? 'var(--fair)' : 'var(--accent)';
+
+  // Contrast bar
+  document.getElementById('valContrast').textContent = d.contrast.toFixed(1);
+  document.getElementById('barContrast').style.width = Math.min(d.contrast / 80 * 100, 100).toFixed(1) + '%';
+
+  // Noise bar
+  document.getElementById('valNoise').textContent = d.noise.toFixed(1);
+  const nPct = Math.min(d.noise / 60 * 100, 100);
+  document.getElementById('barNoise').style.width = nPct.toFixed(1) + '%';
+  document.getElementById('barNoise').style.background =
+    nPct > 60 ? 'var(--poor)' : nPct > 35 ? 'var(--fair)' : 'var(--good)';
+
+  // Session
+  document.getElementById('metaFrames').textContent = d.frame_count;
+  document.getElementById('metaRes').textContent = `${d.width}×${d.height}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KYC Quality Analyzer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0b0c0f;
+  --surface:  #111318;
+  --border:   #1e2130;
+  --border2:  #252a3a;
+  --pass:     #00d68f;
+  --review:   #f0a500;
+  --fail:     #ff3d57;
+  --accent:   #4d7cff;
+  --text:     #d8ddf0;
+  --muted:    #525870;
+  --label:    #8890aa;
+  --mono:     'IBM Plex Mono', monospace;
+  --sans:     'IBM Plex Sans', sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.header-mark {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.header-sep { color: var(--border2); }
+.header-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--label);
+  letter-spacing: 0.04em;
+}
+.live-badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  transition: color 0.3s;
+}
+.live-badge.live { color: var(--pass); }
+.live-badge.error { color: var(--fail); }
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.live-badge.live .live-dot { animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+/* ── Layout ── */
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── Video pane ── */
+.video-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #07080b;
+  position: relative;
+  gap: 0;
+}
+#videoImg {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.video-placeholder {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+}
+.video-placeholder .icon {
+  font-size: 40px;
+  opacity: 0.3;
+}
+.video-placeholder p {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+/* ── Verdict bar (bottom of video) ── */
+.verdict-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(11,12,15,0.85);
+  backdrop-filter: blur(4px);
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+}
+.verdict-label {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+}
+.verdict-reason {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.verdict-score {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* ── Right panel ── */
+.panel {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+
+/* ── Panel sections ── */
+.section {
+  border-bottom: 1px solid var(--border);
+  padding: 18px 20px;
+}
+.section-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ── Score ring ── */
+.score-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.ring-svg { width: 100px; height: 100px; flex-shrink: 0; }
+.ring-bg   { fill: none; stroke: var(--border); stroke-width: 8; }
+.ring-fill {
+  fill: none; stroke-width: 8; stroke-linecap: round;
+  transform-origin: 50% 50%; transform: rotate(-90deg);
+  transition: stroke-dashoffset 0.5s cubic-bezier(.4,0,.2,1), stroke 0.3s;
+}
+.ring-val  { font-family: var(--mono); font-size: 26px; font-weight: 600; fill: var(--text); text-anchor: middle; dominant-baseline: middle; }
+.score-info { flex: 1; }
+.verdict-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  padding: 5px 14px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  margin-bottom: 8px;
+  transition: all 0.3s;
+}
+.missing-list {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-family: var(--mono);
+}
+.missing-list span { color: var(--fail); }
+
+/* ── Head pose ── */
+.pose-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.pose-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.pose-cell .val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 5px;
+  transition: color 0.3s;
+}
+.pose-cell .lbl {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  font-family: var(--mono);
+}
+
+/* ── Feature rows ── */
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.feature-row:last-child { border-bottom: none; }
+.feat-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.feat-name {
+  font-size: 15px;
+  flex: 1;
+  color: var(--text);
+}
+.feat-reason {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+}
+.feat-reason.bad { color: var(--fail); }
+
+/* ── Video quality bars ── */
+.quality-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.quality-row:last-child { margin-bottom: 0; }
+.quality-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.quality-name { font-size: 15px; color: var(--label); }
+.quality-val  { font-family: var(--mono); font-size: 16px; color: var(--text); }
+.bar-track { height: 3px; background: var(--border); border-radius: 1px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 1px; background: var(--accent); transition: width 0.4s ease, background 0.3s; }
+
+/* ── Session / meta ── */
+.meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.meta-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 12px 14px;
+}
+.meta-cell .val {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.meta-cell .lbl { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; }
+
+/* ── Hands indicator ── */
+.hands-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hand-icon {
+  font-size: 26px;
+  filter: grayscale(1);
+  opacity: 0.3;
+  transition: all 0.3s;
+}
+.hand-icon.active { filter: none; opacity: 1; }
+.hand-text {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.3s;
+}
+.hand-text.active { color: var(--fail); }
+
+/* ── Connection section ── */
+.conn-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.conn-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 9px 10px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.conn-input:focus { border-color: var(--accent); }
+.conn-btn {
+  padding: 9px 14px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.conn-btn:hover { background: rgba(77,124,255,0.1); }
+.conn-btn.disc  { border-color: var(--fail); color: var(--fail); }
+.conn-btn.disc:hover { background: rgba(255,61,87,0.1); }
+.conn-hint { font-size: 12px; color: var(--muted); font-family: var(--mono); line-height: 1.6; }
+.conn-hint strong { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="header-mark">KYC</span>
+  <span class="header-sep">|</span>
+  <span class="header-title">Identity Quality Analyzer</span>
+  <div class="live-badge" id="liveBadge">
+    <div class="live-dot"></div>
+    <span id="liveLabel">DISCONNECTED</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Video -->
+  <div class="video-pane">
+    <img id="videoImg" style="display:none" alt=""/>
+    <div class="video-placeholder" id="placeholder">
+      <div class="icon">⬡</div>
+      <p>AWAITING PYTHON SERVER</p>
+    </div>
+    <!-- Verdict overlay bar -->
+    <div class="verdict-bar">
+      <div>
+        <div class="verdict-label" id="vLabel" style="color:var(--muted)">—</div>
+        <div class="verdict-reason" id="vReason"></div>
+      </div>
+      <div class="verdict-score" id="vScore" style="color:var(--muted)">—</div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <aside class="panel">
+
+    <!-- Score -->
+    <div class="section">
+      <div class="section-head">Overall Score</div>
+      <div class="score-wrap">
+        <svg class="ring-svg" viewBox="0 0 100 100">
+          <circle class="ring-bg"   cx="50" cy="50" r="42"/>
+          <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"
+            stroke-dasharray="263.9" stroke-dashoffset="263.9" stroke="var(--pass)"/>
+          <text class="ring-val" id="ringVal" x="50" y="50">–</text>
+        </svg>
+        <div class="score-info">
+          <div class="verdict-pill" id="verdictPill" style="color:var(--muted);border-color:var(--muted)">WAITING</div>
+          <div class="missing-list" id="missingList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Head pose -->
+    <div class="section">
+      <div class="section-head">Head Pose</div>
+      <div class="pose-grid">
+        <div class="pose-cell">
+          <div class="val" id="poseYaw">–</div>
+          <div class="lbl">YAW</div>
+        </div>
+        <div class="pose-cell">
+          <div class="val" id="posePitch">–</div>
+          <div class="lbl">PITCH</div>
+        </div>
+        <div class="pose-cell">
+          <div class="val" id="poseRoll">–</div>
+          <div class="lbl">ROLL</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Facial features -->
+    <div class="section">
+      <div class="section-head">Facial Features</div>
+      <div id="featuresWrap">
+        <div class="feature-row" style="color:var(--muted);font-size:12px;font-family:var(--mono)">
+          Waiting for face detection…
+        </div>
+      </div>
+    </div>
+
+    <!-- Hands -->
+    <div class="section">
+      <div class="section-head">Hand Detection</div>
+      <div class="hands-row">
+        <span class="hand-icon" id="hand1">🖐</span>
+        <span class="hand-icon" id="hand2">🖐</span>
+        <span class="hand-text" id="handText">No hands detected</span>
+      </div>
+    </div>
+
+    <!-- Video quality -->
+    <div class="section">
+      <div class="section-head">Video Quality</div>
+      <div class="quality-row">
+        <div class="quality-header">
+          <span class="quality-name">Sharpness</span>
+          <span class="quality-val" id="qBlur">–</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="barBlur" style="width:0%"></div></div>
+      </div>
+      <div class="quality-row">
+        <div class="quality-header">
+          <span class="quality-name">Brightness</span>
+          <span class="quality-val" id="qBright">–</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="barBright" style="width:0%"></div></div>
+      </div>
+      <div class="quality-row">
+        <div class="quality-header">
+          <span class="quality-name">Gamma</span>
+          <span class="quality-val" id="qGamma">–</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="barGamma" style="width:0%"></div></div>
+      </div>
+      <div class="quality-row">
+        <div class="quality-header">
+          <span class="quality-name">Resolution</span>
+          <span class="quality-val" id="qRes">–</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session -->
+    <div class="section">
+      <div class="section-head">Session</div>
+      <div class="meta-grid">
+        <div class="meta-cell">
+          <div class="val" id="metaFrames">0</div>
+          <div class="lbl">FRAMES</div>
+        </div>
+        <div class="meta-cell">
+          <div class="val" id="metaTime">00:00</div>
+          <div class="lbl">ELAPSED</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connection -->
+    <div class="section">
+      <div class="section-head">Connection</div>
+      <div class="conn-row">
+        <input class="conn-input" id="wsUrl" value="ws://localhost:8765" spellcheck="false"/>
+        <button class="conn-btn" id="connBtn" onclick="toggleConn()">CONNECT</button>
+      </div>
+      <div class="conn-hint">
+        Run <strong>kyc_server.py</strong> first, then connect.
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+<script>
+const CIRC = 2 * Math.PI * 42; // ~263.9
+
+let ws = null, startTime = null, timer = null;
+
+const colorMap = {
+  PASS:     'var(--pass)',
+  REVIEW:   'var(--review)',
+  FAIL:     'var(--fail)',
+  REJECTED: 'var(--fail)',
+};
+
+function toggleConn() {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+  else connect();
+}
+
+function connect() {
+  const url = document.getElementById('wsUrl').value.trim();
+  try { ws = new WebSocket(url); } catch(e) { setBadge('ERROR','error'); return; }
+  setBadge('CONNECTING…', '');
+
+  ws.onopen = () => {
+    setBadge('LIVE', 'live');
+    const b = document.getElementById('connBtn');
+    b.textContent = 'DISCONNECT'; b.classList.add('disc');
+    startTime = Date.now();
+    timer = setInterval(() => {
+      const s = Math.floor((Date.now()-startTime)/1000);
+      document.getElementById('metaTime').textContent =
+        String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+    }, 1000);
+    document.getElementById('placeholder').style.display = 'none';
+  };
+
+  ws.onmessage = e => updateUI(JSON.parse(e.data));
+  ws.onerror   = ()  => setBadge('ERROR','error');
+  ws.onclose   = ()  => {
+    setBadge('DISCONNECTED','');
+    const b = document.getElementById('connBtn');
+    b.textContent = 'CONNECT'; b.classList.remove('disc');
+    clearInterval(timer);
+    document.getElementById('placeholder').style.display = '';
+    document.getElementById('videoImg').style.display = 'none';
+  };
+}
+
+function setBadge(txt, cls) {
+  const b = document.getElementById('liveBadge');
+  b.className = 'live-badge' + (cls ? ' '+cls : '');
+  document.getElementById('liveLabel').textContent = txt;
+}
+
+function updateUI(d) {
+  // Frame
+  const img = document.getElementById('videoImg');
+  img.src   = 'data:image/jpeg;base64,' + d.frame;
+  img.style.display = 'block';
+
+  const color = colorMap[d.verdict] || 'var(--muted)';
+
+  // Verdict bar
+  document.getElementById('vLabel').textContent = d.verdict;
+  document.getElementById('vLabel').style.color = color;
+  document.getElementById('vScore').textContent = d.score;
+  document.getElementById('vScore').style.color = color;
+  document.getElementById('vReason').textContent =
+    d.missing.length ? d.missing.join(', ') + (d.missing.includes('Face') ? ' not detected' : ' obstructed') : '';
+
+  // Score ring
+  const pct = d.score / 100;
+  document.getElementById('ringFill').style.strokeDashoffset = CIRC * (1 - pct);
+  document.getElementById('ringFill').style.stroke = color;
+  document.getElementById('ringVal').textContent = d.score;
+  const pill = document.getElementById('verdictPill');
+  pill.textContent = d.verdict;
+  pill.style.color = color; pill.style.borderColor = color;
+
+  const ml = document.getElementById('missingList');
+  ml.innerHTML = d.missing.length
+    ? 'Missing: ' + d.missing.map(m=>`<span>${m}</span>`).join(', ')
+    : '';
+
+  // Head pose
+  const yawEl   = document.getElementById('poseYaw');
+  const pitchEl = document.getElementById('posePitch');
+  yawEl.textContent   = d.face_found ? d.yaw.toFixed(1)+'°'   : '–';
+  pitchEl.textContent = d.face_found ? d.pitch.toFixed(1)+'°' : '–';
+  document.getElementById('poseRoll').textContent = d.face_found ? d.roll.toFixed(1)+'°' : '–';
+  yawEl.style.color   = Math.abs(d.yaw)   > 25 ? 'var(--review)' : 'var(--text)';
+  pitchEl.style.color = Math.abs(d.pitch) > 20 ? 'var(--review)' : 'var(--text)';
+
+  // Features
+  const fw = document.getElementById('featuresWrap');
+  if (d.face_found && Object.keys(d.features).length) {
+    fw.innerHTML = Object.entries(d.features).map(([name, info]) => `
+      <div class="feature-row">
+        <div class="feat-dot" style="background:${info.visible ? 'var(--pass)' : 'var(--fail)'}"></div>
+        <div class="feat-name">${name}</div>
+        <div class="feat-reason ${info.visible ? '' : 'bad'}">${info.reason}</div>
+      </div>`).join('');
+  } else {
+    fw.innerHTML = '<div class="feature-row" style="color:var(--muted);font-size:12px;font-family:var(--mono)">No face detected</div>';
+  }
+
+  // Hands
+  const h1 = document.getElementById('hand1');
+  const h2 = document.getElementById('hand2');
+  const ht = document.getElementById('handText');
+  h1.classList.toggle('active', d.hand_count >= 1);
+  h2.classList.toggle('active', d.hand_count >= 2);
+  ht.classList.toggle('active', d.hand_count > 0);
+  ht.textContent = d.hand_count === 0 ? 'No hands detected'
+    : d.hand_count === 1 ? '1 hand detected — may obstruct'
+    : '2 hands detected — may obstruct';
+
+  // Quality bars
+  document.getElementById('qBlur').textContent  = d.blur.toFixed(1);
+  document.getElementById('barBlur').style.width = Math.min(d.blur/500*100,100).toFixed(1)+'%';
+  document.getElementById('barBlur').style.background = d.blur < 100 ? 'var(--review)' : 'var(--pass)';
+
+  document.getElementById('qBright').textContent = d.brightness.toFixed(1);
+  document.getElementById('barBright').style.width = (d.brightness/255*100).toFixed(1)+'%';
+  document.getElementById('barBright').style.background = d.brightness < 60 ? 'var(--review)' : 'var(--accent)';
+
+  const gPct = Math.min(Math.abs(d.gamma)/3*100,100);
+  document.getElementById('qGamma').textContent  = d.gamma;
+  document.getElementById('barGamma').style.width = gPct.toFixed(1)+'%';
+
+  document.getElementById('qRes').textContent = `${d.width}×${d.height}`;
+
+  // Session
+  document.getElementById('metaFrames').textContent = d.frame_count;
+}
+</script>
+</body>
+</html>
